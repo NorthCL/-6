@@ -1,0 +1,309 @@
+---
+title: "Упражнение 6"
+author: "Ямпольский Антон"
+date: "04 04 2021"
+output: html_document
+---
+
+## Вариант № 29 (11)
+
+1. Примените указанные в варианте метод к набору данных по своему варианту (см. таблицу ниже). Не забудьте предварительно сделать из категориальных переменных факторы. Выберите оптимальную модель с помощью кросс-валидации. Выведите её коэффициенты с помощью функции coef(). Рассчитайте MSE модели на тестовой выборке.
+
+
+2. Примените указанные в варианте метод к набору данных по своему варианту (см. таблицу ниже). Для модели:
+
+- Подогнать модель на всей выборке и вычислить ошибку (MSE) с кросс-валидацией. По наименьшей MSE подобрать оптимальное значение настроечного параметра метода (гиперпараметр λ или число главных компонент M). - Подогнать модель с оптимальным значением параметра на обучающей выборке, посчитать MSE на тестовой.
+
+- Подогнать модель с оптимальным значением параметра на всех данных, вывести характеристики модели функцией summary().
+
+
+3. Сравните оптимальные модели, полученные в заданиях 1 и 2 по MSE на тестовой выборке. Какой метод дал лучший результат? Доля тестовой выборки: 50%.
+
+
+# Данные *College {ISLR}*:
+
+Accept - Количество принятых заявок;
+
+Private - Фактор с уровнями Нет и Да, указывающий частный или государственный университет;
+
+Apps - Количество полученных заявок;
+
+Enroll - Количество новых студентов, зачисленных;
+
+Top10perc - Процент новых студентов из лучших 10% H.S. класс;
+
+Outstate - Обучение за пределами штата;
+
+Room.Board - Стоимость проживания и питания;
+
+Personal - Расчетные личные расходы;
+
+Terminal - Процент факультета с конечной степенью;
+
+perc.alumni -Процент выпускников, которые жертвуют;
+
+Grad.Rate - Выпускной.
+
+
+```{r setup, include=FALSE}
+
+library('ISLR')              # набор данных College
+library('leaps')             # функция regsubset() -- отбор оптимального 
+                             #  подмножества переменных
+library('glmnet')            # функция glmnet() -- лассо
+library('pls')               # регрессия на главные компоненты -- pcr()
+library('knitr')
+                             #  и частный МНК -- plsr()
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+Набор данных по учебным заведениям *College*.
+
+
+```{r}
+my.seed <- 29
+
+# Загрузка данных College
+data('College')
+# Переводим дискретные количественные переменные в факторы
+College$Peivate <- as.factor(College$Private)
+College <- College[, c(1:5, 9:10, 12, 14, 16, 18)]
+```
+
+
+```{r}
+names(College)
+```
+
+
+```{r}
+dim(College)
+str(College)
+```
+
+Считаем число пропусков в зависимой переменной и убираем их.
+
+```{r}
+# считаем пропуски
+sum(is.na(College$Accept))
+```
+
+
+## Задание 1 
+
+# Отбор путём пошагового исключения переменных
+
+```{r}
+regfit.bwd <- regsubsets(Accept ~ ., data = College,
+                         nvmax = 11, method = 'backward')
+reg.summary <-summary(regfit.bwd)
+reg.summary
+```
+
+```{r}
+names(reg.summary)
+```
+
+```{r}
+# R^2 и скорректированный R^2
+round(reg.summary$rsq, 3)
+```
+
+```{r}
+# На графике
+plot(1:10, reg.summary$rsq, type = 'b',
+     xlab = 'Количество предикторов', ylab = 'R-квадрат')
+# Сюда же добавим скорректированный R-квадрат
+points(1:10, reg.summary$adjr2, col = 'red')
+# Модель с максимальным скорректированным R-квадратом
+which.max(reg.summary$adjr2)
+
+points(which.max(reg.summary$adjr2),
+       reg.summary$adjr2[which.max(reg.summary$adjr2)],
+       col = 'red', cex = 2, pch = 20)
+legend('bottomright', legend = c('R^2', 'R^2_adg'),
+       col = c('black', 'red'), lty = c(1, NA),
+       pch = c(1, 1))
+```
+```{r}
+reg.summary$cp
+# Число предикторов у оптимального значения критерия
+which.min(reg.summary$cp)
+
+# График
+plot(reg.summary$cp, xlab = 'Число предикторов',
+     ylab = 'C_p', type = 'b')
+points(which.min(reg.summary$cp),
+       reg.summary$cp[which.min(reg.summary$cp)],
+       col = 'red', cex = 2, pch = 20)
+```
+
+
+```{r}
+# BIC
+reg.summary$bic
+# Число предикторов у оптимального значения критерия
+which.min(reg.summary$bic)
+
+### 4
+
+# График
+plot(reg.summary$bic, xlab = 'Число предикторов',
+     ylab = 'BIC', type = 'b')
+points(which.min(reg.summary$bic),
+       reg.summary$bic[which.min(reg.summary$bic)],
+       col = 'red', cex = 2, pch = 20)
+```
+
+```{r}
+# Метод plot для визуализации результатов
+plot(regfit.bwd, scale = 'r2')
+plot(regfit.bwd, scale = 'adjr2')
+plot(regfit.bwd, scale = 'Cp')
+plot(regfit.bwd, scale = 'bic')
+
+# Коэффициенты модели с наименьшим BIC
+round(coef(regfit.bwd, 4), 3)
+```
+
+ Нахождение оптимальной модели 
+ 
+ метод: k-кратной кросс-валидации
+
+```{r}
+# функция для прогноза для функции regsubset()
+predict.regsubsets <- function(object, newdata, id, ...){
+    form <- as.formula(object$call[[2]])
+    mat <- model.matrix(form, newdata)
+    coefi <- coef(object, id = id)
+    xvars <- names(coefi)
+    mat[, xvars] %*% coefi
+}
+
+
+
+
+# отбираем 10 блоков наблюдений
+k <- 10
+set.seed(my.seed)
+folds <- sample(1:k, nrow(College), replace = T)
+
+# заготовка под матрицу с ошибками
+cv.errors <- matrix(NA, k, 10, dimnames = list(NULL, paste(1:10)))
+
+# заполняем матрицу в цикле по блокам данных
+for (j in 1:k){
+    best.fit <- regsubsets(Accept ~ ., data = College[folds != j, ],
+                           nvmax = 10)
+    # теперь цикл по количеству объясняющих переменных
+    for (i in 1:10){
+        # модельные значения Salary
+        pred <- predict(best.fit,College[folds == j, ], id = i)
+        # вписываем ошибку в матрицу
+        cv.errors[j, i] <- mean((College$Accept[folds == j] - pred)^2)
+    }
+}
+
+# усредняем матрицу по каждому столбцу (т.е. по блокам наблюдений), 
+#  чтобы получить оценку MSE для каждой модели с фиксированным 
+#  количеством объясняющих переменных
+mean.cv.errors <- apply(cv.errors, 2, mean)
+round(mean.cv.errors, 0)
+
+```
+
+```{r}
+# на графике
+plot(mean.cv.errors, type = 'b')
+points(which.min(mean.cv.errors), mean.cv.errors[which.min(mean.cv.errors)],
+       col = 'red', pch = 20, cex = 2)
+```
+
+```{r}
+reg.best <- regsubsets(Accept ~ ., data = College, nvmax = 2)
+round(coef(reg.best,2), 3)
+```
+
+## Зачада 2 
+
+# лассо-регрессия
+
+```{r}
+# из-за синтаксиса glmnet() формируем явно матрицу объясняющих...
+x <- model.matrix(Accept ~ ., College)[, -1]
+
+# и вектор значений зависимой переменной
+y <- College$Accept
+```
+
+
+```{r}
+set.seed(my.seed)
+train <- sample(1:nrow(x), nrow(x)/2)
+test <- -train
+y.test <- y[test]
+```
+
+```{r}
+# вектор значений гиперпараметра лямбда
+grid <- 10^seq(10, -2, length = 100)
+
+# подгоняем серию моделей ридж-регрессии
+ridge.mod <- glmnet(x, y, alpha = 0, lambda = grid)
+
+# размерность матрицы коэффициентов моделей
+dim(coef(ridge.mod))
+```
+
+
+```{r}
+lasso.mod <- glmnet(x[train, ], y[train], alpha = 1, lambda = grid)
+plot(lasso.mod)
+```
+
+```{r}
+set.seed(my.seed)
+cv.out <- cv.glmnet(x[train, ], y[train], alpha = 1)
+plot(cv.out)
+
+bestlam <- cv.out$lambda.min
+lasso.pred <- predict(lasso.mod, s = bestlam, newx = x[test, ])
+round(mean((lasso.pred - y.test)^2), 0)
+```
+коэффициенты лучшей модели
+
+```{r}
+out <- glmnet(x, y, alpha = 1, lambda = grid)
+lasso.coef <- predict(out, type = 'coefficients',
+                      s = bestlam)[1:11, ]
+round(lasso.coef, 3)
+```
+
+```{r}
+round(lasso.coef[lasso.coef != 0], 3)
+```
+
+
+
+```{r}
+# MSE на тестовой выборке с 10 объясняющими переменными (отбор путём пошагового исключения)
+opt.test <- predict(best.fit, College[test, ], id = 10)
+opt.mse.test <- round(mean((opt.test - y.test)^2), 0)
+
+# MSE на тестовой выборке (лассо-регрессия)
+regres.test <- predict(lasso.mod, x[test, ], ncomp = 10)
+regres.mse.test <- round(mean((lasso.pred - y.test)^2), 0)
+
+MSE.test <- rbind(opt.mse.test, regres.mse.test)
+row.names(MSE.test) <- c('MSE (отбор путём пошагового исключения)', 'MSE (лассо-регрессия)')
+kable(MSE.test)
+```
+Результат сравнивания моделей следущий: 
+
+- MSE на тестовой выборке для модели из первой задачи равен 260122
+
+- MSE на тестовой выборке для модели из второй зачи равен 294044
+
+Итог: стандартная ошибка модели из задания № 1 меньше, чем стандартная ошибка из задания № 2. Это говорит о тои, что модель в задании № 1 оказалась лучшей.
